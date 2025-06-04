@@ -1,1 +1,1 @@
-deep_translator
+python3,kivy,deep_translator
