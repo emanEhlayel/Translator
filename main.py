@@ -1,256 +1,248 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-from deep_translator import GoogleTranslator
-import threading
-from datetime import datetime
+name: All Builds (Linux, macOS, Windows, Android, IPA, APK, AAB)
 
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
 
-class TranslationApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("أداة الترجمة المتقدمة")
-        self.root.geometry("700x600")
-        self.root.resizable(False, False)
-        self.root.configure(bg="#f5f7fa")
+env:
+  BUILD_NUMBER: 1
+  BUILD_VERSION: 1.0.0
+  PYTHON_VERSION: 3.12.2
+  FLUTTER_VERSION: 3.22.2
 
-        # إعداد الخطوط والألوان
-        self.title_font = ("Arial", 16, "bold")
-        self.label_font = ("Arial", 11)
-        self.button_font = ("Arial", 11, "bold")
-        self.text_font = ("Arial", 12)
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
 
-        # اللغات المتاحة
-        self.languages = GoogleTranslator().get_supported_languages(as_dict=True)
-        self.language_names = list(self.languages.keys())
-        self.language_codes = list(self.languages.values())
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-        # إنشاء واجهة المستخدم
-        self.create_widgets()
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
-        # تعيين اللغة الافتراضية
-        self.from_lang_combo.current(self.language_names.index('english'))
-        self.to_lang_combo.current(self.language_names.index('arabic'))
+    - name: Install Tkinter
+      run: sudo apt-get update && sudo apt-get install -y python3-tk
 
-    def create_widgets(self):
-        # إطار العنوان
-        title_frame = tk.Frame(self.root, bg="#4a6fa5")
-        title_frame.pack(fill="x", pady=(0, 15))
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-        # العنوان
-        title_label = tk.Label(
-            title_frame,
-            text="أداة الترجمة المتعددة اللغات",
-            font=self.title_font,
-            fg="white",
-            bg="#4a6fa5",
-            pady=10
-        )
-        title_label.pack()
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
 
-        # إطار إدخال النص
-        input_frame = tk.Frame(self.root, bg="#f5f7fa")
-        input_frame.pack(fill="x", padx=20, pady=5)
+    - name: Patch for linux build
+      run: |
+        flutter doctor
+        sudo apt-get update -y
+        sudo apt-get install -y ninja-build libgtk-3-dev
+        flutter doctor
 
-        tk.Label(
-            input_frame,
-            text="النص الأصلي:",
-            font=self.label_font,
-            bg="#f5f7fa"
-        ).pack(anchor="w", pady=(0, 5))
+    - name: Flet Build Linux
+      run: |
+        flutter config --no-analytics 
+        flet build linux --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION
 
-        self.input_text = scrolledtext.ScrolledText(
-            input_frame,
-            wrap=tk.WORD,
-            width=60,
-            height=8,
-            font=self.text_font,
-            bg="white",
-            fg="#333",
-            insertbackground="#4a6fa5",
-            selectbackground="#c2d4f0"
-        )
-        self.input_text.pack()
+    - name: Upload Linux Artifact
+      uses: actions/upload-artifact@v4.3.4
+      with:
+        name: linux-build-artifact
+        path: build/linux
+        if-no-files-found: warn
+        overwrite: false
 
-        # إطار اختيار اللغات
-        lang_frame = tk.Frame(self.root, bg="#f5f7fa")
-        lang_frame.pack(fill="x", padx=20, pady=10)
+  build-macos:
+    runs-on: macos-latest
 
-        # من لغة
-        from_lang_frame = tk.Frame(lang_frame, bg="#f5f7fa")
-        from_lang_frame.pack(side="left", expand=True)
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-        tk.Label(
-            from_lang_frame,
-            text="من لغة:",
-            font=self.label_font,
-            bg="#f5f7fa"
-        ).pack(anchor="w")
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
-        self.from_lang_combo = ttk.Combobox(
-            from_lang_frame,
-            values=self.language_names,
-            font=self.label_font,
-            state="readonly"
-        )
-        self.from_lang_combo.pack(fill="x", pady=5)
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-        # إلى لغة
-        to_lang_frame = tk.Frame(lang_frame, bg="#f5f7fa")
-        to_lang_frame.pack(side="right", expand=True)
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
 
-        tk.Label(
-            to_lang_frame,
-            text="إلى لغة:",
-            font=self.label_font,
-            bg="#f5f7fa"
-        ).pack(anchor="w")
+    - name: Flet Build macOS
+      run: |
+        flutter config --no-analytics
+        flet build macos --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION
 
-        self.to_lang_combo = ttk.Combobox(
-            to_lang_frame,
-            values=self.language_names,
-            font=self.label_font,
-            state="readonly"
-        )
-        self.to_lang_combo.pack(fill="x", pady=5)
+    - name: Upload macOS Artifact
+      uses: actions/upload-artifact@v4.3.4
+      with:
+        name: macos-build-artifact
+        path: build/macos
+        if-no-files-found: warn
+        overwrite: false
 
-        # زر الترجمة
-        translate_btn = tk.Button(
-            self.root,
-            text="ترجمة",
-            font=self.button_font,
-            bg="#4a6fa5",
-            fg="white",
-            activebackground="#3a5a80",
-            activeforeground="white",
-            relief="flat",
-            padx=20,
-            command=self.start_translation_thread
-        )
-        translate_btn.pack(pady=10)
+  build-windows:
+    runs-on: windows-latest
 
-        # إطار النتيجة
-        result_frame = tk.Frame(self.root, bg="#f5f7fa")
-        result_frame.pack(fill="x", padx=20, pady=5)
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-        tk.Label(
-            result_frame,
-            text="النص المترجم:",
-            font=self.label_font,
-            bg="#f5f7fa"
-        ).pack(anchor="w", pady=(0, 5))
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
-        self.output_text = scrolledtext.ScrolledText(
-            result_frame,
-            wrap=tk.WORD,
-            width=60,
-            height=8,
-            font=self.text_font,
-            bg="white",
-            fg="#333",
-            state="normal",
-            insertbackground="#4a6fa5",
-            selectbackground="#c2d4f0"
-        )
-        self.output_text.pack()
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-        # إطار الحالة
-        status_frame = tk.Frame(self.root, bg="#f5f7fa")
-        status_frame.pack(fill="x", padx=20, pady=(5, 10))
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
 
-        self.status_label = tk.Label(
-            status_frame,
-            text="جاهز للترجمة",
-            font=("Arial", 9),
-            bg="#f5f7fa",
-            fg="#666"
-        )
-        self.status_label.pack(side="left")
+    - name: Flet Build Windows
+      run: |
+        flutter config --no-analytics
+        flet build windows --verbose --no-rich-output --build-number=$env:BUILD_NUMBER --build-version=$env:BUILD_VERSION
 
-        self.time_label = tk.Label(
-            status_frame,
-            text="",
-            font=("Arial", 9),
-            bg="#f5f7fa",
-            fg="#666"
-        )
-        self.time_label.pack(side="right")
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4.3.4
+      with:
+        name: windows-build-artifact
+        path: build/windows
+        if-no-files-found: warn
+        overwrite: false
 
-        # نسخ النص المترجم
-        copy_btn = tk.Button(
-            self.root,
-            text="نسخ النص المترجم",
-            font=("Arial", 10),
-            bg="#e0e5ec",
-            fg="#333",
-            activebackground="#d0d5dc",
-            relief="flat",
-            command=self.copy_translated_text
-        )
-        copy_btn.pack(pady=(0, 10))
+  build-aab:
+    runs-on: macos-latest
 
-    def start_translation_thread(self):
-        # تشغيل الترجمة في thread منفصل لتجنب تجميد الواجهة
-        thread = threading.Thread(target=self.translate_text)
-        thread.start()
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    def translate_text(self):
-        try:
-            self.update_status("جاري الترجمة...", "#4a6fa5")
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
-            # الحصول على النص المدخل
-            text_to_translate = self.input_text.get("1.0", tk.END).strip()
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-            if not text_to_translate:
-                messagebox.showwarning("تحذير", "الرجاء إدخال نص للترجمة")
-                self.update_status("جاهز للترجمة", "#666")
-                return
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
 
-            # الحصول على اللغات المحددة
-            from_lang = self.languages[self.from_lang_combo.get()]
-            to_lang = self.languages[self.to_lang_combo.get()]
+    - name: Flet Build AAB
+      run: |
+        flutter config --no-analytics
+        flet build aab --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION
 
-            # تنفيذ الترجمة
-            translated = GoogleTranslator(source=from_lang, target=to_lang).translate(text_to_translate)
+    - name: Upload AAB Artifact
+      uses: actions/upload-artifact@v4.3.4
+      with:
+        name: aab-build-artifact
+        path: build/aab
+        if-no-files-found: warn
+        overwrite: false
 
-            # عرض النتيجة
-            self.output_text.config(state="normal")
-            self.output_text.delete("1.0", tk.END)
-            self.output_text.insert(tk.END, translated)
-            self.output_text.config(state="disabled")
+  build-apk:
+    runs-on: ubuntu-latest
 
-            # تحديث الحالة
-            now = datetime.now().strftime("%H:%M:%S")
-            self.time_label.config(text=f"آخر ترجمة: {now}")
-            self.update_status("تمت الترجمة بنجاح", "#2e7d32")
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-        except Exception as e:
-            self.update_status("فشل في الترجمة", "#c62828")
-            messagebox.showerror("خطأ", f"حدث خطأ أثناء الترجمة: {str(e)}")
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    def copy_translated_text(self):
-        try:
-            translated_text = self.output_text.get("1.0", tk.END).strip()
-            if translated_text:
-                self.root.clipboard_clear()
-                self.root.clipboard_append(translated_text)
-                self.update_status("تم نسخ النص المترجم", "#2e7d32")
-            else:
-                messagebox.showwarning("تحذير", "لا يوجد نص مترجم للنسخ")
-        except Exception as e:
-            messagebox.showerror("خطأ", f"فشل في نسخ النص: {str(e)}")
+    - name: Install Tkinter
+      run: sudo apt-get update && sudo apt-get install -y python3-tk
 
-    def update_status(self, message, color):
-        self.status_label.config(text=message, fg=color)
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = TranslationApp(root)
+    - name: Setup Java JDK
+      uses: actions/setup-java@v4.2.1
+      with:
+        distribution: 'temurin'
+        java-version: '21'
 
-    # إضافة أيقونة للتطبيق (اختياري)
-    try:
-        root.iconbitmap("translate.ico")  # يمكنك وضع أيقونة في نفس المجلد
-    except:
-        pass
+    - name: Flet Build APK
+      run: |
+        flutter config --no-analytics
+        flet build apk --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION
 
-    root.mainloop()
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4.3.4
+      with:
+        name: apk-build-artifact
+        path: build/apk
+        if-no-files-found: warn
+        overwrite: false
+
+  build-ipa:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+
+    - name: Flet Build IPA
+      run: |
+        flutter config --no-analytics
+        flet build ipa --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION 
+
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4.3.4
+      with:
+        name: ipa-build-artifact
+        path: build/ipa
+        if-no-files-found: warn
+        overwrite: false
