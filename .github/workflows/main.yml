@@ -47,6 +47,10 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
+    - name: Install Flet CLI
+      run: |
+        python3 -m pip install flet
+
     - name: Flet Build APK
       run: |
         flutter config --no-analytics
