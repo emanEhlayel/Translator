@@ -1,4 +1,3 @@
-tkinter
 deep_translator
 threading
 datetime
